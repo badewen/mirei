@@ -3,16 +3,6 @@
 ## Overview
 Conventions that apply to the whole API. Read once.
 
-#### Conventions
-* `Scope` : A script runs in one slot. Single-bot scope pre-binds the global [`bot`](#bot); global scope (`SLOT_ID == "global"`) instead exposes `getBot`/`getBots`/`addBot`/`addDevice`/`removeBot`. Check `EXECUTION_SCOPE`.
-* `Fire-and-forget` : Most [`Bot`](#bot) action methods only queue a command and return immediately (no value). Return does NOT mean the in-game action succeeded.
-* `Replies via events` : "Request" methods (`get_friends`, `clan_data*`, `pwe_*`, `*_availability`, ...) only send a request packet. The answer arrives later as a `packet_received` event — listen for it.
-* `Blocking reads` : [`Bot`](#bot) properties (`pos`, `gems`, `world`, ...) do a real round-trip and block the worker until they return live data. Cheap once, costly in tight loops; each read re-queries.
-* `Coordinates` : Tile coords are integers. `*_at` methods take absolute tile x/y; relative methods (`hit`, `place`, `plant`, `hit_air`, ...) take an offset from the bot's current tile. World pixel positions are floats.
-* `Cancellation` : A stop request aborts the script even mid-loop (instruction hook every 512 ops) and raises `lua stopped`.
-* `Sandbox` : `os.execute`, `os.exit`, `os.getenv` and `debug` are removed.
-* `nil` : A property/getter returns `nil` when the underlying data is unavailable (bot offline, no world loaded, item missing).
-
 ## Globals
 Free functions and variables available in every script.
 
@@ -225,7 +215,6 @@ A structure representing a single bot. Action methods are async and fire-and-for
 * `set_status_icon(icon: number)` : Sets the bot's status icon.
 * `play_audio(audio_type: number, block_type: number)` : Plays an audio cue.
 * `buy_inventory_slots()` : Buys an inventory-slot expansion.
-* `emit_event(event_name: string, password: string)` : Internal. Re-emits a bot event; requires the internal password and only supports `"tutorial_completed"`.
 
 #### Example
 ```lua
