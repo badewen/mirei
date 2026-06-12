@@ -76,6 +76,7 @@ A structure representing a single bot. Action methods are async and fire-and-for
 * `walk(dx: number, dy: number)` : Sends a movement step by the given delta.
 * `find_path(x: number, y: number) -> boolean` : Pathfinds to the tile and waits until arrival (300s timeout). Returns success.
 * `start_path(x: number, y: number) -> boolean` : Starts pathfinding to the tile and returns once accepted (does not wait for arrival).
+* `getpath(x: number, y: number, include_breakables?: boolean = false) -> table` : Computes a path to the tile and returns it as an array of `{x, y}` tiles, without moving. `include_breakables` lets the path route through breakable blocks. Honors `pathfind_config` (incl. `no_limit`). Raises on error.
 * `hit(dx: number, dy: number)` : Hits the foreground block at an offset from the bot.
 * `hit_at(x: number, y: number)` : Hits the foreground block at absolute tile coords.
 * `hit_air(dx: number, dy: number)` : Sends a hit-air at an offset.
@@ -278,6 +279,8 @@ Per-bot pathfinding tuning. Returned by [`Bot`](#bot)`.pathfind_config`.
 * `set_step_delay_ms(ms: number)` : Sets the step delay.
 * `get_step_size() -> number` : Tiles moved per step.
 * `set_step_size(n: number)` : Sets the step size.
+* `get_no_limit() -> boolean` : Whether the fly-distance cap is ignored (paths can cross large gaps).
+* `set_no_limit(on: boolean)` : Sets the no-limit flag.
 
 ## Position
 A position, returned by [`Bot`](#bot)`.pos` and embedded in other structs.
