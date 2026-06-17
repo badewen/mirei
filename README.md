@@ -69,7 +69,7 @@ A structure representing a single bot. Action methods are async and fire-and-for
 * `connect()` : Connects to the game server.
 * `disconnect()` : Disconnects.
 * `respawn()` : Respawns the bot.
-* `warp(world: string, special?: boolean)` : Joins a world (`special` defaults false).
+* `warp(world: string, special?: boolean, direct?: boolean)` : Joins a world (`special` defaults false). `direct` (default false) skips the TryToJoin handshake and loads straight from GwSetup — e.g. `warp("WORLD:PORTAL", false, true)`.
 * `join_world(world: string)` : Joins a world (non-special).
 * `leave()` : Leaves the current world.
 * `get_automation_conf() -> table` : Returns the bot's automation config table, or nil.
@@ -96,7 +96,8 @@ A structure representing a single bot. Action methods are async and fire-and-for
 * `set_auto_collect(enabled: boolean, interval_ms?: number)` : Toggles auto-collect (`interval_ms` defaults 250).
 * `equip(item_id: number)` : Wears an item.
 * `unequip(item_id: number)` : Unwears an item.
-* `drop(item_id: number, amount: number)` : Drops items.
+* `drop(item_id: number, amount: number, inv_type?: number)` : Drops items. `inv_type` overrides the catalog-resolved inventory type.
+* `use_consumable(item_id: number, inv_type?: number)` : Uses a consumable item. `inv_type` overrides the catalog-resolved type.
 * `trash(item_id: number, amount: number, inv_type?: number)` : Trashes items.
 * `wearing(item_id: number) -> boolean` : True if the item is currently worn.
 * `has_item(item_id: number, min?: number, inv_type?: number) -> boolean` : True if the bot holds at least `min` (default 1) of the item.
@@ -159,10 +160,11 @@ A structure representing a single bot. Action methods are async and fire-and-for
 * `open_shop()` : Opens the in-game shop.
 * `close_shop()` : Closes the shop (uses the current world).
 * `buy_pack(pack_id: string)` : Buys an item pack.
+* `stop_all_auto()` : Stops all automation on this bot (the `#automation` lua slot + message spam) and emits an `automation_state` event.
 * `bank_open(x: number, y: number)` : Opens a bank at a tile.
-* `bank_deposit(x: number, y: number, item_id: number, amount: number)` : Deposits items into a bank.
+* `bank_deposit(x: number, y: number, item_id: number, amount: number, inv_type?: number)` : Deposits items into a bank.
 * `bank_withdraw(x: number, y: number, index: number, amount: number)` : Withdraws items from a bank slot.
-* `convert_items(inventory_key: number)` : Converts/crafts items by inventory key.
+* `convert_items(item_id: number, inv_type?: number)` : Converts/crafts an item by id (with optional inventory type).
 * `recycle_block(amount: number, x: number, y: number)` : Recycles blocks at a tile.
 * `claim_recycle_prize(x: number, y: number)` : Claims a recycle prize.
 * `craft_blueprint()` : Crafts the active blueprint.
@@ -207,9 +209,10 @@ A structure representing a single bot. Action methods are async and fire-and-for
 * `send_portal_exit(x: number, y: number)` : Sends a portal-exit packet for a tile.
 * `send_packets(packets: table[], buffer?: boolean)` : Sends raw packet documents (see [`Packet`](#packet)). `buffer` (default true) batches via the send gate; false sends immediately, bypassing the throttle.
 * `send_packet(packet_id: string, fields: table, buffer?: boolean)` : Sends one raw packet built from `packet_id` + fields.
-* `send_map_point(x: number, y: number)` : Queues a single map-point movement packet (binary blob built in Rust).
+* `send_map_point(x: number, y: number)` : Queues a single map-point movement packet (binary blob built in Rust) and force-sets the bot's local position to that tile (via `ForceSetCoord`).
 * `claim_xp_level()` : Claims an XP level reward.
 * `start_tutorial()` : Starts the tutorial flow.
+* `get_quest() -> QuestState` : Returns the bot's [`QuestState`](#queststate) (tutorial + daily quest progress), or nil if account data isn't loaded yet.
 * `claim_quest(quest_id: string, tutorial?: boolean)` : Claims a quest. `tutorial` is accepted but unused.
 * `claim_achievement_reward(achievement_reward_claimed: string)` : Claims an achievement reward.
 * `open_treasure(remove_item?: boolean)` : Opens a treasure (`remove_item` default false).
@@ -359,6 +362,27 @@ One inventory entry. Returned by [`Inventory`](#inventory)`.items` / [`Inventory
 * `inventory_type_name` (`string`) : Inventory type name (e.g. `"Seed"`).
 * `name` (`string`) : Item name (present when known).
 
+## QuestState
+The bot's quest progress. Returned by [`Bot`](#bot)`:get_quest`.
+
+#### Properties
+* `tutorial_state` (`number`) : Tutorial progress state.
+* `tutorial_quest_complete` (`boolean`) : True when the tutorial is finished.
+* `tutorial_quests` (`table`) : Map of quest id → [`QuestEntry`](#questentry).
+* `daily_quests` (`table`) : Up to 3 [`QuestEntry`](#questentry) slots at integer keys 1–3; empty slots are absent (nil).
+* `previous_three_daily_quest_ids` (`string[]`) : Ids of the previous three daily quests.
+
+## QuestEntry
+One quest's runtime progress, inside [`QuestState`](#queststate). The static quest definition is not embedded — look it up with [`getQuestInfo`](#config)`(entry.id)`.
+
+#### Properties
+* `id` (`string`) : Quest id (pass to [`getQuestInfo`](#config) for the definition).
+* `current_step` (`number`) : Current step/phase index.
+* `progress` (`number[]`) : Per-step progress counters.
+* `visited_worlds` (`string[]`) : Worlds visited for this quest.
+* `inventory_size` (`number`) : Inventory size recorded for the quest.
+* `claimed` (`boolean`) : True if the reward was claimed.
+
 ## Packet
 The `packet` builder. Builds packet documents to feed [`Bot`](#bot)`:send_packets`. Each builder returns one packet table, or nil on a build failure. Passing a wrong argument type raises an error.
 
@@ -384,6 +408,17 @@ The `packet` builder. Builds packet documents to feed [`Bot`](#bot)`:send_packet
 * `RESPAWN_ID` (`string`) : Respawn packet id.
 * `CHARACTER_CREATED_ID` (`string`) : Character-created packet id.
 * `TUTORIAL_STATE_ID` (`string`) : Tutorial-state packet id.
+* `ACHIEVEMENT_ID` (`string`) : Achievement-command packet id (incoming).
+* `READY_TO_PLAY_ID` (`string`) : Ready-to-play packet id.
+* `GENERIC_VERSION_NOTIFIED_ID` (`string`) : Generic-version-notified packet id.
+* `WELCOME_GIFT_REQUEST_ID` (`string`) : Welcome-gift-request packet id.
+* `INSTRUCTION_STATE_COMPLETED_ID` (`string`) : Instruction-state-completed packet id.
+* `PLAY_PLAYER_AUDIO_ID` (`string`) : Play-player-audio packet id.
+* `SEND_GET_WORLD_ID` (`string`) : Send-get-world (join/get world) packet id.
+* `RECEIVE_GET_WORLD_ID` (`string`) : Receive-get-world (inbound world data blob) packet id.
+* `TERMS_OPT_IN_ID` (`string`) : Terms opt-in packet id.
+* `TERMS_OPT_OUT_ID` (`string`) : Terms opt-out packet id.
+* `BUY_ITEM_PACK_ID` (`string`) : Buy-item-pack packet id.
 
 #### Methods
 * `build_move(x: number, y: number, animation?: number, direction?: number, teleport?: boolean) -> table` : Builds a position packet (`animation` default 1, `direction` 0, `teleport` false).
@@ -407,6 +442,14 @@ The `packet` builder. Builds packet documents to feed [`Bot`](#bot)`:send_packet
 * `build_respawn(ticks?: number) -> table` : Builds a respawn packet (defaults to current .NET ticks).
 * `build_character_created(gender: number, country: number, skin_color_index: number) -> table` : Builds a character-created packet.
 * `build_tutorial_state(state: number) -> table` : Builds a tutorial-state packet.
+* `build_generic_version_notified(type_value: number, version: number) -> table` : Builds a generic-version-notified packet.
+* `build_welcome_gift_request() -> table` : Builds a welcome-gift-request packet.
+* `build_instruction_state_completed(instruction_events_completed: number) -> table` : Builds an instruction-state-completed packet.
+* `build_play_player_audio(audio_type: number, audio_block_type: number) -> table` : Builds a play-player-audio packet.
+* `build_terms_opt_in() -> table` : Builds a terms opt-in packet.
+* `build_terms_opt_out() -> table` : Builds a terms opt-out packet.
+* `build_evaluate_achievement(state: number) -> table` : Builds a send-evaluate-achievement-state packet (the `state` value goes in the `yZav` field).
+* `build_buy_item_pack(pack_id: string) -> table` : Builds a buy-item-pack packet for the given shop pack id.
 
 #### Example
 ```lua
@@ -421,6 +464,7 @@ The event system. Callbacks registered with `addEvent` only fire while `listenEv
 
 #### Properties
 * `events.PACKET_RECEIVED` (`string`) : `"packet_received"`. Payload: [`PacketReceivedEvent`](#packetreceivedevent).
+* `events.PACKET_SENT` (`string`) : `"packet_sent"`. Payload: [`PacketSentEvent`](#packetsentevent).
 * `events.CHAT_MESSAGE` (`string`) : `"chat_message"`. Payload: [`ChatMessageEvent`](#chatmessageevent).
 * `events.STATE_CHANGED` (`string`) : `"state_changed"`. Payload: [`StateChangedEvent`](#statechangedevent).
 * `events.JOINED_WORLD` (`string`) : `"joined_world"`. Payload: [`JoinedWorldEvent`](#joinedworldevent).
@@ -430,7 +474,7 @@ The event system. Callbacks registered with `addEvent` only fire while `listenEv
 * `events.PRESEND` (`string`) : `"presend"`. Payload: [`PreSendEvent`](#presendevent).
 
 #### Methods
-* `addEvent(event: string, callback: function)` : Registers a callback for an event. Only the eight names above are accepted; others error. Multiple callbacks per event are allowed.
+* `addEvent(event: string, callback: function)` : Registers a callback for an event. Only the nine names above are accepted; others error. Multiple callbacks per event are allowed.
 * `removeEvent(event: string)` : Removes all callbacks for one event.
 * `removeEvents()` : Removes all callbacks for all events.
 * `listenEvents(seconds: number)` : Subscribes and dispatches events to callbacks until the timeout elapses (or `unlistenEvents` is called). In global scope it listens to every bot; otherwise to this slot. Callbacks may be async.
@@ -457,6 +501,16 @@ Payload passed to a `packet_received` callback.
 * `ids` (`string[]`) : Packet-id strings in the envelope.
 * `packet` (`table`) : Table `{ seq, at, direction, ids, document }`. `document` holds the envelope sub-packets as `m0`, `m1`, ... plus the message count.
 * `ping_ms` (`number`) : Ping in milliseconds, or nil.
+
+## PacketSentEvent
+Payload passed to a `packet_sent` callback. Same as [`PacketReceivedEvent`](#packetreceivedevent) without `ping_ms`.
+
+#### Properties
+* `type` (`string`) : `"packet_sent"`.
+* `bot_id` (`string`) : The bot id.
+* `seq` (`number`) : Sequence number.
+* `ids` (`string[]`) : Packet-id strings in the envelope.
+* `packet` (`table`) : Table `{ seq, at, direction, ids, document }`. `document` holds the envelope sub-packets as `m0`, `m1`, ... plus the message count.
 
 ## ChatMessageEvent
 Payload for a `chat_message` callback.
