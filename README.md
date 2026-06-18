@@ -12,6 +12,8 @@ Free functions and variables available in every script.
 * `EXECUTION_SCOPE` (`string`) : `"global"` or `"single:<id>"`.
 * `events` (`table`) : Table of event-name constants (see [`Events`](#events)).
 * `InventoryType` (`table`) : Maps inventory-type name to byte. `Block`=0, `BlockBackground`=1, `Seed`=2, `BlockWater`=3, `WearableItem`=4, `Weapon`=5, `Throwable`=6, `Consumable`=7, `Shard`=8, `Blueprint`=9, `Familiar`=10, `FAMFood`=11, `BlockWiring`=12.
+* `BotState` (`table`) : Maps bot-state name to its string value — the same string `bot.status` returns and `state_changed` carries in `e.state`. Names (value == name): `Created`, `AuthenticatingHttp`, `Connecting`, `AwaitVChk`, `AwaitGPd`, `MenuIdle`, `JoiningWorld`, `Redirecting`, `LoadingWorld`, `SpawnSetup`, `InWorld`, `Disconnected`, `Failed`, `AccountBanned`, `WorldBanned`, `IpBanned`, `Maintenance`.
+* `PlatformType` (`table`) : Maps platform name to string. `Android`="android", `Windows`="windows".
 
 #### Methods
 * `print(...)` : Prints args (tab-joined) to the script console. Output is capped to the last 200 lines.
@@ -23,8 +25,11 @@ Free functions and variables available in every script.
 * `parseJson(s: string) -> any` : Alias of [`json`](#json)`.decode`.
 * `getBot(name: string) -> Bot` : Global scope only. Returns the [`Bot`](#bot) with that id, or nil.
 * `getBots() -> Bot[]` : Global scope only. Returns all [`Bot`](#bot) instances.
-* `addBot(email: string, password: string) -> Bot` : Global scope only. Creates an email/password [`Bot`](#bot) and returns it.
+* `addBot(email: string, password: string, platform_type: string, device_id?: string) -> Bot` : Global scope only. Creates an email/password [`Bot`](#bot) and returns it. `platform_type` is `"android"` or `"windows"` (case-insensitive, or use [`PlatformType`](#globals)`.*`); any other value errors.
 * `addDevice(device_id?: string) -> Bot` : Global scope only. Creates a device-id (guest) [`Bot`](#bot); generates an id when omitted.
+* `addSteam(account: string, password: string, device_id?: string) -> Bot` : Global scope only. Creates a Steam account/password [`Bot`](#bot) (always Windows).
+* `addSteamTicket(ticket: string, device_id?: string) -> Bot` : Global scope only. Creates a [`Bot`](#bot) from a Steam auth session ticket (always Windows).
+* `addToken(token: string, platform_type: string, device_id?: string) -> Bot` : Global scope only. Creates a [`Bot`](#bot) from a SocialFirst token. `platform_type` is `"android"` or `"windows"` (case-insensitive, or use [`PlatformType`](#globals)`.*`); any other value errors.
 * `removeBot(id: string)` : Global scope only. Removes a bot.
 
 #### Example
@@ -479,7 +484,8 @@ The event system. Callbacks registered with `addEvent` only fire while `listenEv
 * `removeEvents()` : Removes all callbacks for all events.
 * `listenEvents(seconds: number)` : Subscribes and dispatches events to callbacks until the timeout elapses (or `unlistenEvents` is called). In global scope it listens to every bot; otherwise to this slot. Callbacks may be async.
 * `unlistenEvents()` : Signals the running `listenEvents` loop to stop after the current callback.
-* `waitForPacket(opts?: table, timeout_sec: number) -> boolean` : Blocks until a matching `packet_received` arrives or the timeout elapses; returns whether it matched. `opts.id` matches a packet id; `opts.match_cb(fields)` matches sub-document fields; both nil matches the first packet. Note: this clears all `packet_received` callbacks when it finishes.
+* `waitForPacket(opts?: table, timeout_sec: number) -> boolean` : Blocks until a matching `packet_received` arrives or the timeout elapses; returns whether it matched. `opts.id` matches a packet id; `opts.match_cb(fields)` matches sub-document fields; both nil matches the first packet. Only matches packets arriving after the call. Note: clears all `packet_received` callbacks when it finishes.
+* `waitForState(opts?: table, timeout_sec: number) -> boolean` : Twin of `waitForPacket` for `state_changed`. Blocks until a matching state change arrives or the timeout elapses; returns whether it matched. `opts.state` matches the new state (use [`BotState`](#globals)`.*`); `opts.match_cb(state)` matches the new state string; both nil matches the first state change; both set require both. 
 
 #### Example
 ```lua
@@ -489,6 +495,31 @@ addEvent("chat_message", function(e)
 end)
 listenEvents(30)
 removeEvent("chat_message")
+```
+
+`waitForPacket` / `waitForState` wrap the loop above — no `listenEvents`/`removeEvent` needed:
+```lua
+-- wait up to 10s for the next inbound packet of any kind
+waitForPacket({}, 10)
+
+-- wait for a specific packet id whose fields match a value
+-- match for ID=APOOV, FIELD1="BANMYACCPLS" FIELD2="LOCKMYSTORAGEPLS"
+local ok = waitForPacket({ id = "APOOV", match_cb = function(f)
+  if f["FIELD1"] == "BANMYACCPLS" and f["FIELD2"] == "LOCKMYSTORAGEPLS" then
+    return true
+  end
+  return false
+end }, 30)
+
+-- block until this bot spawns into the world (max 30s)
+if not waitForState({ state = BotState.InWorld }, 30) then
+  log("join timed out")
+end
+
+-- wait for any state change, then act on a disconnect/failure
+waitForState({ match_cb = function(s)
+  return s == BotState.Disconnected or s == BotState.Failed
+end }, 60)
 ```
 
 ## PacketReceivedEvent
