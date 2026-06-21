@@ -400,6 +400,7 @@ The `packet` builder. Builds packet documents to feed [`Bot`](#bot)`:send_packet
 * `SET_BLOCK_ID` (`string`) : Set-block packet id.
 * `SET_BACKGROUND_ID` (`string`) : Set-background packet id.
 * `SET_SEED_ID` (`string`) : Set-seed packet id.
+* `BLOCK_DESTROYED_ID` (`string`) : Block-destroyed packet id (incoming).
 * `COLLECT_ID` (`string`) : Collect-collectable packet id.
 * `DROP_ITEM_ID` (`string`) : Drop-item packet id.
 * `WORLD_CHAT_ID` (`string`) : World-chat packet id.
