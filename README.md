@@ -244,6 +244,7 @@ World state for a bot. Returned by [`Bot`](#bot)`.world`.
 * `entrance` ([`Vector2i`](#vector2i)) : Spawn/entrance tile, or nil.
 * `players` ([`Player[]`](#player)) : Players in the world (snapshot at access time).
 * `collectables` ([`Collectable[]`](#collectable)) : Collectables in the world (snapshot at access time).
+* `enemies` ([`Enemy[]`](#enemy)) : AI enemies in the world (snapshot at access time).
 
 #### Methods
 * `player(user_id: string) -> Player` : Finds a [`Player`](#player) in the snapshot by id, or nil.
@@ -318,6 +319,14 @@ A dropped/spawned collectable in the world.
 * `is_gem` (`boolean`) : True if it is a gem.
 * `gem_type` (`number`) : Gem type.
 * `pos` ([`Position`](#position)) : The collectable's position.
+
+## Enemy
+An AI enemy in the world.
+
+#### Properties
+* `id` (`number`) : Enemy id.
+* `enemy_type` (`number`) : Enemy type id.
+* `pos` ([`Position`](#position)) : The enemy's position.
 
 ## Tile
 A single world tile. Returned by [`World`](#world)`:get_tile` / [`World`](#world)`:get_tiles`.
@@ -400,7 +409,6 @@ The `packet` builder. Builds packet documents to feed [`Bot`](#bot)`:send_packet
 * `SET_BLOCK_ID` (`string`) : Set-block packet id.
 * `SET_BACKGROUND_ID` (`string`) : Set-background packet id.
 * `SET_SEED_ID` (`string`) : Set-seed packet id.
-* `BLOCK_DESTROYED_ID` (`string`) : Block-destroyed packet id (incoming).
 * `COLLECT_ID` (`string`) : Collect-collectable packet id.
 * `DROP_ITEM_ID` (`string`) : Drop-item packet id.
 * `WORLD_CHAT_ID` (`string`) : World-chat packet id.
@@ -441,8 +449,8 @@ The `packet` builder. Builds packet documents to feed [`Bot`](#bot)`:send_packet
 * `build_global_chat(message: string) -> table` : Builds a global-chat packet.
 * `build_wear(item_id: number) -> table` : Builds a wear packet.
 * `build_unwear(item_id: number) -> table` : Builds an unwear packet.
-* `build_use_consumable(item_id: number) -> table` : Builds a use-consumable packet.
-* `build_update_belt(item_id: number) -> table` : Builds an update-belt packet.
+* `build_use_consumable(item_id: number, inventory_type?: number) -> table` : Builds a use-consumable packet. `inventory_type` defaults to the item's configured type.
+* `build_update_belt(item_id: number, inventory_type?: number) -> table` : Builds an update-belt packet. `inventory_type` defaults to the item's configured type.
 * `build_join_world(world: string, special?: boolean) -> table` : Builds a join-world packet.
 * `build_leave_world() -> table` : Builds a leave-world packet.
 * `build_respawn(ticks?: number) -> table` : Builds a respawn packet (defaults to current .NET ticks).
